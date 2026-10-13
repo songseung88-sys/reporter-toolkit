@@ -1,0 +1,71 @@
+name: Build JTBC Remote Access v1.1
+on:
+  push:
+    branches:
+      - build-jtbc-v1-1-final-20261013
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Recreate final AHK source
+        shell: pwsh
+        run: |
+          $b64 = @'
+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[... CONTENT TRUNCATED FOR TOOL LIMIT ...]
+'@
+          $compressed = [Convert]::FromBase64String(($b64 -replace '\s',''))
+          $input = [IO.MemoryStream]::new(,$compressed)
+          $gzip = [IO.Compression.GzipStream]::new($input,[IO.Compression.CompressionMode]::Decompress)
+          $output = [IO.MemoryStream]::new()
+          $gzip.CopyTo($output)
+          $gzip.Dispose()
+          $input.Dispose()
+          [IO.File]::WriteAllBytes("$env:GITHUB_WORKSPACE\JTBC_Remote_Access_v1.1.ahk",$output.ToArray())
+          $output.Dispose()
+
+      - name: Download official AutoHotkey v2
+        shell: pwsh
+        run: |
+          $headers = @{ "User-Agent" = "JTBC-Remote-Access-Build" }
+          $release = Invoke-RestMethod -Headers $headers https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest
+          $asset = $release.assets | Where-Object { $_.name -match '^AutoHotkey_2.*\.zip$' } | Select-Object -First 1
+          if (-not $asset) { throw "AutoHotkey v2 ZIP asset not found" }
+          Invoke-WebRequest -Headers $headers $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\autohotkey.zip"
+          Expand-Archive "$env:RUNNER_TEMP\autohotkey.zip" "$env:RUNNER_TEMP\autohotkey"
+
+      - name: Download official Ahk2Exe
+        shell: pwsh
+        run: |
+          $headers = @{ "User-Agent" = "JTBC-Remote-Access-Build" }
+          $release = Invoke-RestMethod -Headers $headers https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest
+          $asset = $release.assets | Where-Object { $_.name -match '\.zip$' } | Select-Object -First 1
+          if (-not $asset) { throw "Ahk2Exe ZIP asset not found" }
+          Invoke-WebRequest -Headers $headers $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\ahk2exe.zip"
+          Expand-Archive "$env:RUNNER_TEMP\ahk2exe.zip" "$env:RUNNER_TEMP\ahk2exe"
+
+      - name: Compile with official Ahk2Exe
+        shell: pwsh
+        run: |
+          $compiler = Get-ChildItem "$env:RUNNER_TEMP\ahk2exe" -Recurse -Filter "Ahk2Exe.exe" | Select-Object -First 1
+          $base = Get-ChildItem "$env:RUNNER_TEMP\autohotkey" -Recurse -Filter "AutoHotkey64.exe" | Select-Object -First 1
+          if (-not $compiler) { throw "Ahk2Exe.exe not found" }
+          if (-not $base) { throw "AutoHotkey64.exe not found" }
+          & $compiler.FullName /in "$env:GITHUB_WORKSPACE\JTBC_Remote_Access_v1.1.ahk" /out "$env:GITHUB_WORKSPACE\JTBC_Remote_Access_v1.1.exe" /base $base.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Ahk2Exe failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path "$env:GITHUB_WORKSPACE\JTBC_Remote_Access_v1.1.exe")) { throw "Output EXE not created" }
+
+      - name: Show SHA-256
+        shell: pwsh
+        run: |
+          Get-FileHash "$env:GITHUB_WORKSPACE\JTBC_Remote_Access_v1.1.exe" -Algorithm SHA256
+
+      - name: Upload compiled EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: JTBC_Remote_Access_v1.1
+          path: JTBC_Remote_Access_v1.1.exe
+          if-no-files-found: error
+          retention-days: 1
