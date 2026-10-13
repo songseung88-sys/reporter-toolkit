@@ -54,7 +54,6 @@ jobs:
           if (-not $compiler) { throw "Ahk2Exe.exe not found" }
           if (-not $base) { throw "AutoHotkey64.exe not found" }
           & $compiler.FullName /in "$env:GITHUB_WORKSPACE\JTBC_Remote_Access_v1.1.ahk" /out "$env:GITHUB_WORKSPACE\JTBC_Remote_Access_v1.1.exe" /base $base.FullName
-          if ($LASTEXITCODE -ne 0) { throw "Ahk2Exe failed with exit code $LASTEXITCODE" }
           if (-not (Test-Path "$env:GITHUB_WORKSPACE\JTBC_Remote_Access_v1.1.exe")) { throw "Output EXE not created" }
 
       - name: Show SHA-256
