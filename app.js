@@ -1,6 +1,91 @@
 (() => {
   'use strict';
   const STORE_KEY = 'reporter-toolkit-catalog-v1';
+  const GITHUB_CATALOG_API = 'https://api.github.com/repos/songseung88-sys/reporter-toolkit/contents/catalog.js';
+  // Token is kept only in this page's JS memory, never in localStorage or the repository.
+  let githubToken = '', githubSha = '', githubPublishing = false, githubPublishAgain = false;
+  let githubPublishTimer = null, githubStatus = '연결되지 않음';
+  const githubHeaders = token => ({
+    'Accept':'application/vnd.github+json',
+    'Authorization':'Bearer '+token,
+    'X-GitHub-Api-Version':'2022-11-28'
+  });
+  async function githubApi(method, payload, token=githubToken){
+    const response = await fetch(GITHUB_CATALOG_API, {
+      method, cache:'no-store',
+      headers:{...githubHeaders(token), ...(payload?{'Content-Type':'application/json'}:{})},
+      ...(payload?{body:JSON.stringify(payload)}:{})
+    });
+    const json = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(response.status === 401 ? '인증 토큰이 올바르지 않습니다.' :
+      response.status === 403 ? 'GitHub 저장소 쓰기 권한이 없거나 API 사용이 제한되었습니다.' :
+      response.status === 404 ? '저장소나 catalog.js 파일을 찾지 못했습니다.' :
+      response.status === 409 ? '다른 변경과 충돌했습니다. 다시 확인해주세요.' :
+      'GitHub API 오류 ('+response.status+'): '+String(json.message||'처리 실패'));
+    return json;
+  }
+  function catalogSource(data=catalog){
+    return '// 취재 도구함 게시용 데이터. 관리자 페이지에서 자동으로 게시됨.\nwindow.REPORTER_TOOLKIT_SEED = ' +
+      JSON.stringify(data,null,2).replace(/[\u2028\u2029]/g, c => c==='\u2028'?'\\u2028':'\\u2029') + ';\n';
+  }
+  function encodeBase64Utf8(s){
+    const bytes=new TextEncoder().encode(s);
+    let bin='';
+    for(let i=0;i<bytes.length;i+=8192)bin+=String.fromCharCode(...bytes.subarray(i,i+8192));
+    return btoa(bin);
+  }
+  async function connectGithub(){
+    const input=$('#githubTokenInput');
+    const token=input?.value.trim()||'';
+    if(input)input.value='';
+    if(token.length<20){toast('GitHub 토큰을 입력해주세요.');return;}
+    try {
+      const remote=await githubApi('GET',null,token);
+      if(!remote.sha)throw Error('게시된 파일의 버전을 확인할 수 없습니다.');
+      githubToken=token;githubSha=remote.sha;githubStatus='연결됨 · 저장할 때 자동 게시';
+      toast('GitHub 연결 완료. 이후 변경사항은 자동 게시됩니다.');
+      settings();
+    }catch(err){githubToken='';githubSha='';githubStatus='연결 실패';toast('GitHub 연결 실패: '+err.message);}
+  }
+  function disconnectGithub(){
+    clearTimeout(githubPublishTimer);githubToken='';githubSha='';githubPublishAgain=false;
+    githubStatus='연결되지 않음';toast('GitHub 연결을 끊었습니다.');settings();
+  }
+  function queueGithubPublish(){
+    if(!githubToken)return;
+    clearTimeout(githubPublishTimer);
+    githubStatus='변경사항 게시 예정';
+    githubPublishTimer=setTimeout(()=>{void publishGithub();},1000);
+  }
+  async function publishGithub(){
+    if(!githubToken){toast('데이터 관리에서 GitHub를 먼저 연결해주세요.');return;}
+    if(githubPublishing){githubPublishAgain=true;return;}
+    githubPublishing=true;
+    const snapshot=structuredClone(catalog);
+    githubStatus='GitHub 게시 중';
+    try {
+      const remote=await githubApi('GET');
+      if(remote.sha!==githubSha){
+        githubStatus='충돌: GitHub 파일이 외부에서 변경됨';
+        toast('GitHub 데이터가 다른 곳에서 변경되었습니다. 데이터 관리에서 연결을 다시 확인해주세요.');
+        githubToken='';githubSha='';githubPublishAgain=false;
+        return;
+      }
+      const result=await githubApi('PUT',{
+        message:'Publish reporter toolkit catalog from admin page',
+        content:encodeBase64Utf8(catalogSource(snapshot)),
+        sha:remote.sha,
+        branch:'main'
+      });
+      githubSha=result.content?.sha||'';
+      githubStatus='게시 성공 · GitHub Pages 배포 중';
+      toast('GitHub에 게시했습니다. Pages 배포 후 열람 페이지에 반영됩니다.');
+    }catch(err){githubStatus='게시 실패';toast('GitHub 게시 실패: '+err.message+' (로컬 기록은 유지됩니다.)');}
+    finally{
+      githubPublishing=false;
+      if(githubPublishAgain && githubToken){githubPublishAgain=false;queueGithubPublish();}
+    }
+  }
   const seed = window.REPORTER_TOOLKIT_SEED;
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
@@ -61,7 +146,7 @@
   let page='home', toolId='', tab='releases', filter='all', query='';
   const toolById = (id) => catalog.tools.find(x=>x.id===id);
   function save() {
-    try {localStorage.setItem(STORE_KEY, JSON.stringify(catalog)); toast('저장했습니다.');}
+    try {localStorage.setItem(STORE_KEY, JSON.stringify(catalog)); toast(githubToken?'로컬 저장 완료 · GitHub 게시 대기':'브라우저에 저장했습니다.'); queueGithubPublish();}
     catch(e){toast('로컬 저장에 실패했습니다. JSON으로 백업하세요.');}
     draw();
   }
@@ -122,16 +207,20 @@
   function formTool(id){const existing=toolById(id);modal(existing?'프로그램 정보 수정':'새 프로그램 추가','프로그램 정보를 입력합니다.',`<form id="toolForm"><input type="hidden" name="id" value="${esc(existing?.id||'')}"><div class="form-grid"><div class="field"><label for="toolName">프로그램 이름 *</label><input id="toolName" name="name" required maxlength="70" value="${esc(existing?.name||'')}" placeholder="예: 녹취 정리기"></div><div class="field"><label for="toolCategory">분류</label><input id="toolCategory" name="category" maxlength="50" value="${esc(existing?.category||'')}" placeholder="예: 원고 편집"></div></div><div class="field"><label for="toolShort">한 줄 설명 *</label><input id="toolShort" name="short" required maxlength="160" value="${esc(existing?.short||'')}" placeholder="어떤 작업을 하는 프로그램인가요?"></div><div class="field"><label for="toolDescription">상세 소개</label><textarea id="toolDescription" name="description" maxlength="2000">${esc(existing?.description||'')}</textarea></div><div class="form-grid"><div class="field"><label>현재 상태</label><select name="status"><option value="active" ${existing?.status==='active'?'selected':''}>운영 중</option><option value="building" ${!existing||existing.status==='building'?'selected':''}>개발 중</option></select></div><div class="field"><label>아이콘</label><select name="icon">${[['box','일반 도구'],['shield','접속·보안'],['file','파일'],['captions','원고·자막']].map(([val,label])=>`<option value="${val}" ${existing?.icon===val?'selected':''}>${label}</option>`).join('')}</select></div></div><div class="field"><label>GitHub 저장소 주소 (선택)</label><input name="repository" type="url" placeholder="https://github.com/owner/repo" value="${esc(existing?.repository||'')}"><div class="field-note">저장소 주소를 등록하면 프로그램 페이지에서 바로 열 수 있습니다.</div></div><div class="form-actions">${existing?`<button class="button warn small" type="button" data-action="remove-tool" data-id="${esc(existing.id)}">${svg('trash')} 프로그램 삭제</button>`:''}<button class="button" type="button" data-action="close">취소</button><button class="button primary" type="submit">${svg('check')} 저장하기</button></div></form>`);}
   function formRelease(id, idx){const t=toolById(id)||catalog.tools[0];if(!t)return toast('먼저 프로그램을 추가하세요.');const r=Number.isInteger(idx)?t.releases[idx]:null;modal(r?'버전 기록 수정':'새 버전 등록','버전별 변경 사항과 설치 파일 링크를 등록합니다.',`<form id="releaseForm"><input type="hidden" name="originalTool" value="${esc(t.id)}"><input type="hidden" name="index" value="${r?idx:''}"><div class="form-grid"><div class="field"><label>프로그램</label><select name="toolId" ${r?'disabled':''}>${catalog.tools.map(x=>`<option value="${esc(x.id)}" ${x.id===t.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="field"><label>버전 번호 *</label><input name="version" required maxlength="32" value="${esc(r?.version||'')}" placeholder="예: 1.0.5"></div></div><div class="form-grid"><div class="field"><label>배포일 (선택)</label><input name="date" type="date" value="${esc(r?.date||'')}"></div><div class="field"><label>버전 구분</label><select name="kind">${[['stable','기준 버전'],['beta','시험 버전'],['archived','보관 기록']].map(([k,v])=>`<option value="${k}" ${r?.kind===k?'selected':''}>${v}</option>`).join('')}</select></div></div><div class="field"><label>게시글 제목 *</label><input name="title" required maxlength="140" placeholder="예: 우클릭 메뉴 등록 기능 추가" value="${esc(r?.title||'')}"></div><div class="field"><label>변경 사항 (한 줄에 하나씩)</label><textarea name="changes" maxlength="8000" placeholder="새로운 기능&#10;수정한 오류">${esc((r?.changes||[]).join('\n'))}</textarea></div><div class="field"><label>실제 파일 다운로드 주소 (선택)</label><input name="download" type="url" placeholder="https://github.com/.../releases/download/..." value="${esc(r?.download||'')}"><div class="field-note">GitHub Releases에 파일을 올린 다음 실제 주소를 등록합니다. 파일명에 버전 숫자가 없어도 됩니다.</div></div><div class="field"><label>비고 (선택)</label><input name="note" maxlength="250" value="${esc(r?.note||'')}" placeholder="예: 배포 전 테스트 필요"></div><div class="form-actions">${r?`<button class="button warn" type="button" data-action="remove-release" data-id="${esc(t.id)}" data-index="${idx}">삭제</button>`:''}<button class="button" type="button" data-action="close">취소</button><button class="button primary" type="submit">${svg('check')} 저장하기</button></div></form>`);}
   function formGuide(id,idx){const t=toolById(id);if(!t)return;const g=Number.isInteger(idx)?t.guide[idx]:null;modal(g?'설명서 항목 수정':'설명서 항목 추가','설치·사용·오류 해결 등을 단계별로 기록할 수 있습니다.',`<form id="guideForm"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="index" value="${g?idx:''}"><div class="field"><label>항목 제목 *</label><input name="title" required maxlength="100" value="${esc(g?.title||'')}" placeholder="예: 프로그램 설치"></div><div class="field"><label>설명 내용 *</label><textarea name="text" required maxlength="8000" style="min-height:190px" placeholder="상세한 사용법을 적어 주세요.">${esc(g?.text||'')}</textarea></div><div class="form-actions">${g?`<button class="button warn" type="button" data-action="remove-guide" data-id="${esc(id)}" data-index="${idx}">삭제</button>`:''}<button class="button" type="button" data-action="close">취소</button><button class="button primary" type="submit">${svg('check')} 저장하기</button></div></form>`);}
-  function settings(){modal('데이터 관리','기록을 파일로 백업하거나 복원합니다.',`<div class="manage-grid"><div class="manage-card">${svg('download')}<h3>JSON 백업</h3><p>현재 프로그램, 버전 게시판, 사용 설명서를 파일로 다운로드합니다.</p><button class="button" type="button" data-action="export">${svg('download')} 데이터 내보내기</button></div><div class="manage-card">${svg('upload')}<h3>JSON 복원</h3><p>이전에 백업한 파일을 선택해 현재 브라우저의 데이터를 교체합니다.</p><input type="file" id="importFile" accept=".json,application/json" hidden><button class="button" type="button" data-action="import">${svg('upload')} 데이터 가져오기</button></div><div class="manage-card"><span>${svg('file')}</span><h3>사이트 업데이트용 파일</h3><p>현재 기록을 catalog.js로 다운로드합니다. GitHub 저장소의 동일한 파일을 교체하면 공개 사이트에 반영됩니다.</p><button class="button" type="button" data-action="publish">${svg('download')} catalog.js 다운로드</button></div></div><div class="form-actions" style="margin-top:20px"><button class="button warn" data-action="reset" type="button">${svg('trash')} 초기 데이터로 되돌리기</button><button class="button" data-action="close" type="button">닫기</button></div>`,'wide');}
+  function settings(){
+    const syncCard = githubToken
+      ? `<div class="manage-card">${svg('check')}<h3>GitHub 자동 게시</h3><p>${esc(githubStatus)}. 프로그램·버전·설명서 저장 시 catalog.js를 GitHub에 게시합니다.</p><button class="button" type="button" data-action="sync-now">지금 게시</button> <button class="button" type="button" data-action="disconnect-github">연결 끊기</button></div>`
+      : `<div class="manage-card">${svg('upload')}<h3>GitHub 자동 게시 연결</h3><p>저장소 reporter-toolkit의 Contents: Read and write 권한을 가진 Fine-grained token을 연결하면, 저장할 때 열람용 데이터가 자동 게시됩니다. 토큰은 현재 페이지의 메모리에만 보관됩니다.</p><input id="githubTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="GitHub fine-grained token" style="max-width:100%;min-height:41px;padding:8px;border:1px solid #ced7e5;border-radius:8px"><button class="button primary" type="button" data-action="connect-github">GitHub 연결</button></div>`;
+    modal('데이터 관리','백업·복원 및 GitHub 게시를 관리합니다.',
+      `<div class="manage-grid">${syncCard}<div class="manage-card">${svg('download')}<h3>JSON 백업</h3><p>현재 프로그램, 버전 게시판, 사용 설명서를 파일로 다운로드합니다.</p><button class="button" type="button" data-action="export">${svg('download')} 데이터 내보내기</button></div><div class="manage-card">${svg('upload')}<h3>JSON 복원</h3><p>이전에 백업한 파일을 선택해 현재 브라우저의 데이터를 교체합니다.</p><input type="file" id="importFile" accept=".json,application/json" hidden><button class="button" type="button" data-action="import">${svg('upload')} 데이터 가져오기</button></div><div class="manage-card">${svg('file')}<h3>수동 게시용 파일</h3><p>GitHub 연결을 사용하지 않는 경우 catalog.js를 내려받아 직접 올릴 수 있습니다.</p><button class="button" type="button" data-action="publish">${svg('download')} catalog.js 다운로드</button></div></div><div class="form-actions" style="margin-top:20px"><button class="button warn" data-action="reset" type="button">${svg('trash')} 초기 데이터로 되돌리기</button><button class="button" data-action="close" type="button">닫기</button></div>`,'wide');
+  }
   function exportData(){const blob=new Blob([JSON.stringify(catalog,null,2)],{type:'application/json;charset=utf-8'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download='reporter-toolkit-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);toast('JSON 백업 파일을 만들었습니다.');}
   function publishCatalog(){
-    const source='// 취재 도구함 게시용 데이터. GitHub Pages의 catalog.js를 이 파일로 교체합니다.\nwindow.REPORTER_TOOLKIT_SEED = '
-      + JSON.stringify(catalog,null,2).replace(/[\u2028\u2029]/g, c => c==='\u2028'?'\\u2028':'\\u2029') + ';\n';
-    const blob = new Blob([source],{type:'text/javascript;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');a.href=url;a.download='catalog.js';document.body.append(a);a.click();a.remove();
+    const blob=new Blob([catalogSource()],{type:'text/javascript;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='catalog.js';document.body.append(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
-    toast('catalog.js를 내려받았습니다. GitHub에 업로드해 반영하세요.');
+    toast('catalog.js를 내려받았습니다.');
   }
   async function importData(file){if(!file)return;try{if(file.size>4*1024*1024)throw Error('4MB 이하 JSON만 불러올 수 있습니다.');const text=await file.text();const incoming=verifyCatalog(JSON.parse(text));if(!confirm('현재 브라우저의 데이터가 백업 파일 내용으로 교체됩니다. 계속할까요?'))return;catalog=incoming;page='home';toolId='';closeModal();save();go('home');toast('백업 파일을 복원했습니다.');}catch(err){toast('가져오기 실패: '+err.message);}}
   function submitTool(f){const data=new FormData(f);const id=String(data.get('id')||'');const existing=toolById(id);const url=String(data.get('repository')||'').trim();if(url&&!validUrl(url))return toast('GitHub 주소가 올바르지 않습니다.');const name=short(data.get('name'),70).trim();if(!name)return;const obj={id:existing?.id||'tool-'+Date.now().toString(36),name,category:short(data.get('category'),50),short:short(data.get('short'),160),description:short(data.get('description'),2000),status:data.get('status')==='active'?'active':'building',icon:['shield','file','captions','box'].includes(data.get('icon'))?data.get('icon'):'box',version:existing?.version||'',repository:url,homepage:existing?.homepage||'',tags:existing?.tags||[],releases:existing?.releases||[],guide:existing?.guide||[]};if(existing){catalog.tools[catalog.tools.indexOf(existing)]=obj;}else catalog.tools.push(obj);closeModal();save();go(obj.id);}
@@ -151,6 +240,8 @@
     else if(a==='add-guide')formGuide(id);
     else if(a==='edit-guide')formGuide(id,Number(item.dataset.index));
     else if(a==='settings')settings();else if(a==='export')exportData();else if(a==='import')$('#importFile')?.click();else if(a==='publish')publishCatalog();
+    else if(a==='connect-github')void connectGithub();else if(a==='disconnect-github')disconnectGithub();
+    else if(a==='sync-now')void publishGithub();
     else if(a==='reset'){if(confirm('모든 로컬 변경 사항을 초기화합니다. 미리 JSON 백업을 받았나요?')){catalog=structuredClone(seed);closeModal();save();go('home');}}
     else if(a==='remove-tool'){const t=toolById(id);if(t&&confirm(`“${t.name}”와 버전 기록, 설명서를 모두 삭제할까요?`)){catalog.tools=catalog.tools.filter(x=>x.id!==id);closeModal();save();go('home');}}
     else if(a==='remove-release'){const t=toolById(id),i=Number(item.dataset.index);if(t?.releases[i]&&confirm('이 버전 기록을 삭제할까요?')){t.releases.splice(i,1);t.version=t.releases.find(r=>r.kind==='stable')?.version||'';closeModal();save();draw();}}
