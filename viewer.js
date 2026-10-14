@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   // Viewer reads only the published catalog.js; browser-local admin edits are not exposed.
-  const catalog = window.REPORTER_TOOLKIT_SEED;
+  let catalog = window.REPORTER_TOOLKIT_SEED;
   if (!catalog || !Array.isArray(catalog.tools)) return;
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
@@ -117,5 +117,29 @@
     if(e.key==='Escape')$('#sidebar').classList.remove('open');
     if(e.key==='/'&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) {e.preventDefault();$('#searchInput').focus();}
   });
+  // Refresh the published catalog while this read-only page remains open.
+  // A cache-busting URL makes new GitHub Pages deployments visible without manual reload.
+  let catalogCheckInProgress=false;
+  function checkPublishedCatalog(){
+    if(catalogCheckInProgress || document.visibilityState==='hidden')return;
+    catalogCheckInProgress=true;
+    const script=document.createElement('script');
+    script.src='catalog.js?viewer_check='+Date.now();
+    script.onload=()=>{
+      const published=window.REPORTER_TOOLKIT_SEED;
+      if(published?.schema===1 && Array.isArray(published.tools) &&
+         JSON.stringify(published)!==JSON.stringify(catalog)){
+        catalog=structuredClone(published);
+        if(page==='tool'&&!toolById(toolId)){page='home';toolId='';location.hash='#/home';}
+        draw();
+      }
+      script.remove();catalogCheckInProgress=false;
+    };
+    script.onerror=()=>{script.remove();catalogCheckInProgress=false;};
+    document.head.append(script);
+  }
+  window.setInterval(checkPublishedCatalog,60000);
+  window.addEventListener('focus',checkPublishedCatalog);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkPublishedCatalog();});
   iconize();route();
 })();
