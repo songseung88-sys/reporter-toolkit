@@ -63,7 +63,7 @@
     const latest=t.releases.find(r=>r.version===t.version)||t.releases[0];
     const download = latest && latest.download?link(latest.download,'파일 다운로드','button primary'):'<button class="button primary" disabled title="다운로드 파일 URL 미등록">'+svg('download')+' 파일 미등록</button>';
     return `<button class="back-link" data-nav="home">${svg('back')} 전체 프로그램으로</button><div class="detail-head">${toolIcon(t)}<div class="detail-heading"><h1>${esc(t.name)}</h1><p>${esc(t.description)}</p><div class="detail-tags">${statusBadge(t)}${(t.tags||[]).map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div></div></div>
-      <section class="detail-summary"><div><div class="detail-summary-label">현재 기준 버전</div><div class="detail-summary-version">${t.version?'v'+esc(t.version):'아직 버전이 없습니다'}</div><div class="detail-summary-note">${latest?esc(latest.note||'버전별 기록에서 상세 정보 확인'):'다운로드할 설치 파일이 등록되지 않았습니다.'}</div></div><div class="detail-actions">${download}${t.repository?link(t.repository,'GitHub 저장소'):''}</div></section>
+      <section class="detail-summary"><div><div class="detail-summary-label">현재 기준 버전</div><div class="detail-summary-version">${t.version?'v'+esc(t.version):'아직 버전이 없습니다'}</div><div class="detail-summary-note">${latest?esc(latest.note||'버전별 기록에서 상세 정보 확인'):'다운로드할 설치 파일이 등록되지 않았습니다.'}</div></div><div class="detail-actions">${download}</div></section>
       <div class="tabs" role="tablist" aria-label="프로그램 상세 정보"><button role="tab" class="tab ${tab==='releases'?'active':''}" aria-selected="${tab==='releases'}" data-tab="releases">업데이트 기록</button><button role="tab" class="tab ${tab==='guide'?'active':''}" aria-selected="${tab==='guide'}" data-tab="guide">사용 설명서</button></div>
       ${tab==='guide'?guideSection(t):releaseSection(t)}`;
   }
