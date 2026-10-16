@@ -120,6 +120,7 @@
         githubStatus='충돌: GitHub 파일이 외부에서 변경됨';
         toast('GitHub 데이터가 다른 곳에서 변경되었습니다. 데이터 관리에서 연결을 다시 확인해주세요.');
         githubToken='';githubSha='';githubPublishAgain=false;
+        forgetRememberedGithubToken();
         return;
       }
       const result=await githubApi('PUT',{
