@@ -2,8 +2,29 @@
   'use strict';
   const STORE_KEY = 'reporter-toolkit-catalog-v1';
   const GITHUB_CATALOG_API = 'https://api.github.com/repos/songseung88-sys/reporter-toolkit/contents/catalog.js';
-  // Token is kept only in this page's JS memory, never in localStorage or the repository.
+  // By default the token stays only in memory. Explicit device opt-in permits
+  // persisting it in this browser; never embed a token in the deployed site.
+  const GITHUB_REMEMBER_KEY = 'reporter-toolkit-github-remember-v1';
   let githubToken = '', githubSha = '', githubPublishing = false, githubPublishAgain = false;
+  let githubRemember = false, githubPendingLocalEdits = false;
+  function rememberedGithubToken(){
+    try { return localStorage.getItem(GITHUB_REMEMBER_KEY)||''; }catch{return '';}
+  }
+  function forgetRememberedGithubToken(){
+    try {localStorage.removeItem(GITHUB_REMEMBER_KEY);}catch{}
+    githubRemember=false;
+  }
+  function rememberGithubToken(){
+    if(!githubToken)return false;
+    try{
+      localStorage.setItem(GITHUB_REMEMBER_KEY,githubToken);
+      githubRemember=true;
+      return true;
+    }catch{
+      toast('브라우저에 토큰을 저장할 수 없습니다. 자동 연결을 사용할 수 없습니다.');
+      return false;
+    }
+  }
   let githubPublishTimer = null, githubStatus = '연결되지 않음';
   const githubHeaders = token => ({
     'Accept':'application/vnd.github+json',
@@ -34,22 +55,52 @@
     for(let i=0;i<bytes.length;i+=8192)bin+=String.fromCharCode(...bytes.subarray(i,i+8192));
     return btoa(bin);
   }
-  async function connectGithub(){
-    const input=$('#githubTokenInput');
-    const token=input?.value.trim()||'';
+  async function connectGithub(savedToken=null){
+    const restoring=typeof savedToken==='string';
+    const input=restoring?null:$('#githubTokenInput');
+    const optIn=!restoring && !!$('#rememberGithubToken')?.checked;
+    const token=restoring?savedToken:(input?.value.trim()||'');
     if(input)input.value='';
-    if(token.length<20){toast('GitHub 토큰을 입력해주세요.');return;}
-    try {
+    if(token.length<20){
+      if(restoring)forgetRememberedGithubToken();
+      else toast('GitHub 토큰을 입력해주세요.');
+      return;
+    }
+    try{
       const remote=await githubApi('GET',null,token);
       if(!remote.sha)throw Error('게시된 파일의 버전을 확인할 수 없습니다.');
-      githubToken=token;githubSha=remote.sha;githubStatus='연결됨 · 저장할 때 자동 게시';
-      toast('GitHub 연결 완료. 이후 변경사항은 자동 게시됩니다.');
-      settings();
-    }catch(err){githubToken='';githubSha='';githubStatus='연결 실패';toast('GitHub 연결 실패: '+err.message);}
+      githubToken=token;githubSha=remote.sha;
+      if(!restoring){
+        if(optIn){if(!rememberGithubToken())githubRemember=false;}
+        else forgetRememberedGithubToken();
+      }else githubRemember=true;
+      githubStatus=githubRemember?'연결됨 · 이 브라우저에서 자동 연결':'연결됨 · 저장할 때 자동 게시';
+      toast(restoring?'GitHub 자동 연결이 복원됐습니다.':'GitHub 연결 완료. 이후 변경사항은 자동 게시됩니다.');
+      if(!restoring)settings();
+      if(githubPendingLocalEdits){githubPendingLocalEdits=false;queueGithubPublish();}
+    }catch(err){
+      githubToken='';githubSha='';githubStatus='연결 실패';
+      if(restoring){
+        forgetRememberedGithubToken();
+        toast('GitHub 자동 연결에 실패했습니다. 토큰을 다시 연결해주세요.');
+      }else toast('GitHub 연결 실패: '+err.message);
+    }
   }
   function disconnectGithub(){
-    clearTimeout(githubPublishTimer);githubToken='';githubSha='';githubPublishAgain=false;
+    clearTimeout(githubPublishTimer);
+    githubToken='';githubSha='';githubPublishAgain=false;githubPendingLocalEdits=false;
+    forgetRememberedGithubToken();
     githubStatus='연결되지 않음';toast('GitHub 연결을 끊었습니다.');settings();
+  }
+  function enableGithubRemember(){
+    if(!githubToken)return;
+    if(!confirm('이 브라우저에 GitHub 쓰기 토큰을 저장하면 다시 접속해도 자동 연결됩니다. 같은 GitHub Pages 도메인의 스크립트나 PC에 접근하는 사람이 토큰을 읽을 위험이 있습니다. 개인 PC에서만 사용할 것을 권장합니다. 계속할까요?'))return;
+    if(rememberGithubToken()){githubStatus='연결됨 · 이 브라우저에서 자동 연결';settings();toast('이 브라우저에서 연결 유지를 켰습니다.');}
+  }
+  function disableGithubRemember(){
+    forgetRememberedGithubToken();
+    githubStatus='연결됨 · 저장할 때 자동 게시';settings();
+    toast('자동 연결 저장을 해제했습니다. 현재 탭의 연결은 유지됩니다.');
   }
   function queueGithubPublish(){
     if(!githubToken)return;
@@ -80,7 +131,14 @@
       githubSha=result.content?.sha||'';
       githubStatus='게시 성공 · GitHub Pages 배포 중';
       toast('GitHub에 게시했습니다. Pages 배포 후 열람 페이지에 반영됩니다.');
-    }catch(err){githubStatus='게시 실패';toast('GitHub 게시 실패: '+err.message+' (로컬 기록은 유지됩니다.)');}
+    }catch(err){
+      githubStatus='게시 실패';
+      if(err.message==='인증 토큰이 올바르지 않습니다.'){
+        githubToken='';githubSha='';forgetRememberedGithubToken();
+        githubStatus='토큰 만료·취소로 연결 해제';
+      }
+      toast('GitHub 게시 실패: '+err.message+' (로컬 기록은 유지됩니다.)');
+    }
     finally{
       githubPublishing=false;
       if(githubPublishAgain && githubToken){githubPublishAgain=false;queueGithubPublish();}
@@ -146,8 +204,12 @@
   let page='home', toolId='', tab='releases', filter='all', query='';
   const toolById = (id) => catalog.tools.find(x=>x.id===id);
   function save() {
-    try {localStorage.setItem(STORE_KEY, JSON.stringify(catalog)); toast(githubToken?'로컬 저장 완료 · GitHub 게시 대기':'브라우저에 저장했습니다.'); queueGithubPublish();}
-    catch(e){toast('로컬 저장에 실패했습니다. JSON으로 백업하세요.');}
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(catalog));
+      toast(githubToken?'로컬 저장 완료 · GitHub 게시 대기':'브라우저에 저장했습니다.');
+      if(githubToken)queueGithubPublish();
+      else if(rememberedGithubToken())githubPendingLocalEdits=true;
+    }catch(e){toast('로컬 저장에 실패했습니다. JSON으로 백업하세요.');}
     draw();
   }
   function toast(message){
@@ -209,8 +271,8 @@
   function formGuide(id,idx){const t=toolById(id);if(!t)return;const g=Number.isInteger(idx)?t.guide[idx]:null;modal(g?'설명서 항목 수정':'설명서 항목 추가','설치·사용·오류 해결 등을 단계별로 기록할 수 있습니다.',`<form id="guideForm"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="index" value="${g?idx:''}"><div class="field"><label>항목 제목 *</label><input name="title" required maxlength="100" value="${esc(g?.title||'')}" placeholder="예: 프로그램 설치"></div><div class="field"><label>설명 내용 *</label><textarea name="text" required maxlength="8000" style="min-height:190px" placeholder="상세한 사용법을 적어 주세요.">${esc(g?.text||'')}</textarea></div><div class="form-actions">${g?`<button class="button warn" type="button" data-action="remove-guide" data-id="${esc(id)}" data-index="${idx}">삭제</button>`:''}<button class="button" type="button" data-action="close">취소</button><button class="button primary" type="submit">${svg('check')} 저장하기</button></div></form>`);}
   function settings(){
     const syncCard = githubToken
-      ? `<div class="manage-card">${svg('check')}<h3>GitHub 자동 게시</h3><p>${esc(githubStatus)}. 프로그램·버전·설명서 저장 시 catalog.js를 GitHub에 게시합니다.</p><button class="button" type="button" data-action="sync-now">지금 게시</button> <button class="button" type="button" data-action="disconnect-github">연결 끊기</button></div>`
-      : `<div class="manage-card">${svg('upload')}<h3>GitHub 자동 게시 연결</h3><p>저장소 reporter-toolkit의 Contents: Read and write 권한을 가진 Fine-grained token을 연결하면, 저장할 때 열람용 데이터가 자동 게시됩니다. 토큰은 현재 페이지의 메모리에만 보관됩니다.</p><input id="githubTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="GitHub fine-grained token" style="max-width:100%;min-height:41px;padding:8px;border:1px solid #ced7e5;border-radius:8px"><button class="button primary" type="button" data-action="connect-github">GitHub 연결</button></div>`;
+      ? `<div class="manage-card">${svg('check')}<h3>GitHub 자동 게시</h3><p>${esc(githubStatus)}. 프로그램·버전·설명서 저장 시 catalog.js를 GitHub에 게시합니다.</p><button class="button" type="button" data-action="sync-now">지금 게시</button> ${githubRemember?'<button class="button" type="button" data-action="forget-github">연결 유지 끄기</button>':'<button class="button" type="button" data-action="remember-github">이 브라우저에서 연결 유지</button>'} <button class="button" type="button" data-action="disconnect-github">연결 끊기</button></div>`
+      : `<div class="manage-card">${svg('upload')}<h3>GitHub 자동 게시 연결</h3><p>저장소 reporter-toolkit의 Contents: Read and write 권한을 가진 Fine-grained token으로 연결합니다.</p><input id="githubTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="GitHub fine-grained token" style="max-width:100%;min-height:41px;padding:8px;border:1px solid #ced7e5;border-radius:8px"><label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-size:13px"><input id="rememberGithubToken" type="checkbox" style="width:16px;height:16px"> 이 브라우저에서 연결 유지</label><p style="font-size:12px">선택하면 토큰을 브라우저에 저장합니다. 같은 도메인의 웹 스크립트에서 읽힐 위험이 있으므로 개인 PC에서만 사용하세요. 기본값은 저장하지 않음입니다.</p><button class="button primary" type="button" data-action="connect-github">GitHub 연결</button></div>`;
     modal('데이터 관리','백업·복원 및 GitHub 게시를 관리합니다.',
       `<div class="manage-grid">${syncCard}<div class="manage-card">${svg('download')}<h3>JSON 백업</h3><p>현재 프로그램, 버전 게시판, 사용 설명서를 파일로 다운로드합니다.</p><button class="button" type="button" data-action="export">${svg('download')} 데이터 내보내기</button></div><div class="manage-card">${svg('upload')}<h3>JSON 복원</h3><p>이전에 백업한 파일을 선택해 현재 브라우저의 데이터를 교체합니다.</p><input type="file" id="importFile" accept=".json,application/json" hidden><button class="button" type="button" data-action="import">${svg('upload')} 데이터 가져오기</button></div><div class="manage-card">${svg('file')}<h3>수동 게시용 파일</h3><p>GitHub 연결을 사용하지 않는 경우 catalog.js를 내려받아 직접 올릴 수 있습니다.</p><button class="button" type="button" data-action="publish">${svg('download')} catalog.js 다운로드</button></div></div><div class="form-actions" style="margin-top:20px"><button class="button warn" data-action="reset" type="button">${svg('trash')} 초기 데이터로 되돌리기</button><button class="button" data-action="close" type="button">닫기</button></div>`,'wide');
   }
@@ -241,6 +303,7 @@
     else if(a==='edit-guide')formGuide(id,Number(item.dataset.index));
     else if(a==='settings')settings();else if(a==='export')exportData();else if(a==='import')$('#importFile')?.click();else if(a==='publish')publishCatalog();
     else if(a==='connect-github')void connectGithub();else if(a==='disconnect-github')disconnectGithub();
+    else if(a==='remember-github')enableGithubRemember();else if(a==='forget-github')disableGithubRemember();
     else if(a==='sync-now')void publishGithub();
     else if(a==='reset'){if(confirm('모든 로컬 변경 사항을 초기화합니다. 미리 JSON 백업을 받았나요?')){catalog=structuredClone(seed);closeModal();save();go('home');}}
     else if(a==='remove-tool'){const t=toolById(id);if(t&&confirm(`“${t.name}”와 버전 기록, 설명서를 모두 삭제할까요?`)){catalog.tools=catalog.tools.filter(x=>x.id!==id);closeModal();save();go('home');}}
@@ -254,5 +317,7 @@
   window.addEventListener('hashchange',route);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#sidebar').classList.remove('open');}if(e.key==='/'&&!$('#modalRoot').firstChild&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();$('#searchInput').focus();}});
   iconize();route();
+  const remembered=rememberedGithubToken();
+  if(remembered)void connectGithub(remembered);
 })();
 
