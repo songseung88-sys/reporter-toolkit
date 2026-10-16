@@ -2,6 +2,12 @@
 
 프로그램별 다운로드 링크, 업데이트 기록, 사용 설명서를 관리하는 개인용 정적 웹사이트입니다.
 
+## 로그인형 관리자 서버 (배포 준비 완료, 아직 운영 전환 전)
+
+`secure/worker.js`, `secure/admin.html`, `secure/wrangler.toml`에 관리자 로그인과 서버 비밀값 기반 자동 게시 기능을 준비했습니다. **Cloudflare Worker 배포와 비밀번호·토큰 Secret 설정 전에는 기존 GitHub Pages 관리자를 유지합니다.** 설정과 검증을 끝낸 다음 관리자 진입점을 Worker 주소로 전환할 예정입니다.
+
+배포 방법: [secure/README.md](secure/README.md).
+
 ## 접속 주소
 
 - **관리자 페이지:** https://songseung88-sys.github.io/reporter-toolkit/ (기존 `index.html`; 브라우저에서 프로그램, 버전, 설명서 수정 및 데이터 관리)
