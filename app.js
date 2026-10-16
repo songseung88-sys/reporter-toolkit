@@ -1,6 +1,9 @@
 (() => {
   'use strict';
   const STORE_KEY = 'reporter-toolkit-catalog-v1';
+  const serverMode = window.REPORTER_ADMIN_SERVER === true;
+  const SERVER_DIRTY_KEY = 'reporter-toolkit-server-draft-v1';
+  let serverSha='', serverPublishing=false, serverTimer=null, serverPublishAgain=false, serverStatus='연결 확인 중';
   const GITHUB_CATALOG_API = 'https://api.github.com/repos/songseung88-sys/reporter-toolkit/contents/catalog.js';
   // By default the token stays only in memory. Explicit device opt-in permits
   // persisting it in this browser; never embed a token in the deployed site.
@@ -145,6 +148,71 @@
       if(githubPublishAgain && githubToken){githubPublishAgain=false;queueGithubPublish();}
     }
   }
+  async function serverRequest(method,path,payload){
+    const response=await fetch(path,{
+      method,credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json','X-Reporter-Toolkit':'admin'},
+      ...(payload?{body:JSON.stringify(payload)}:{})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(response.status===401){
+      toast('관리자 로그인이 만료됐습니다. 다시 로그인해주세요.');
+      throw new Error('관리자 로그인 만료');
+    }
+    if(!response.ok)throw new Error(response.status===409?'다른 곳에서 GitHub 내용이 변경되었습니다. 자동 덮어쓰기를 중단했습니다.':
+      '서버 요청 실패: '+String(data.error||response.status));
+    return data;
+  }
+  async function loadServerCatalog(){
+    if(!serverMode)return;
+    try{
+      const result=await serverRequest('GET','/api/catalog');
+      serverSha=result.sha;
+      serverStatus='관리자 로그인 연결됨';
+      const draft=localStorage.getItem(SERVER_DIRTY_KEY)==='1';
+      if(!draft){
+        catalog=verifyCatalog(result.catalog);
+        localStorage.setItem(STORE_KEY,JSON.stringify(catalog));
+        draw();
+      }else toast('이전 작업에서 게시되지 않은 로컬 변경사항이 있습니다. 데이터 관리에서 지금 게시할 수 있습니다.');
+    }catch(err){serverStatus='연결 확인 실패';toast('게시 데이터 불러오기 실패: '+err.message);}
+  }
+  function queueServerPublish(){
+    if(!serverMode)return;
+    clearTimeout(serverTimer);
+    serverStatus='GitHub 게시 대기';
+    serverTimer=setTimeout(()=>{void publishServer();},1100);
+  }
+  async function publishServer(){
+    if(!serverMode)return;
+    if(serverPublishing){serverPublishAgain=true;return;}
+    serverPublishing=true;
+    const snapshot=structuredClone(catalog);
+    serverStatus='GitHub 게시 중';
+    try{
+      if(!serverSha)serverSha=(await serverRequest('GET','/api/catalog')).sha;
+      const result=await serverRequest('PUT','/api/catalog',{catalog:snapshot,sha:serverSha});
+      serverSha=result.sha;
+      if(JSON.stringify(catalog)===JSON.stringify(snapshot)){
+        localStorage.removeItem(SERVER_DIRTY_KEY);
+      }else serverPublishAgain=true;
+      serverStatus='게시 완료 · Pages 배포 진행';
+      toast('GitHub 게시 완료. 배포 후 읽기 전용 화면에 반영됩니다.');
+    }catch(err){serverStatus='게시 실패 · 로컬 변경사항 유지';toast(err.message);}
+    finally{
+      serverPublishing=false;
+      if(serverPublishAgain){serverPublishAgain=false;queueServerPublish();}
+    }
+  }
+  async function logoutServer(){
+    if(!confirm('관리자 계정에서 로그아웃할까요?'))return;
+    try{await serverRequest('POST','/api/logout',{});}catch{}
+    location.replace('/');
+  }
+  function settingsServer(){
+    modal('데이터 관리','GitHub 자동 게시와 로컬 백업',
+      `<div class="manage-grid"><div class="manage-card">${svg('check')}<h3>자동 게시</h3><p>${esc(serverStatus)}. GitHub 토큰은 서버에만 저장되고 브라우저에는 저장되지 않습니다.</p><button class="button primary" type="button" data-action="sync-now">지금 게시</button><button class="button" type="button" data-action="logout-admin">로그아웃</button></div><div class="manage-card">${svg('download')}<h3>JSON 백업</h3><p>현재 프로그램·버전·사용 설명서를 내려받습니다.</p><button class="button" type="button" data-action="export">데이터 내보내기</button></div><div class="manage-card">${svg('upload')}<h3>JSON 복원</h3><input type="file" id="importFile" accept=".json,application/json" hidden><button class="button" type="button" data-action="import">데이터 가져오기</button></div></div><div class="form-actions" style="margin-top:20px"><button class="button" data-action="close" type="button">닫기</button></div>`, 'wide');
+  }
   const seed = window.REPORTER_TOOLKIT_SEED;
   const $ = (sel, root=document) => root.querySelector(sel);
   const $$ = (sel, root=document) => [...root.querySelectorAll(sel)];
@@ -207,9 +275,15 @@
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(catalog));
-      toast(githubToken?'로컬 저장 완료 · GitHub 게시 대기':'브라우저에 저장했습니다.');
-      if(githubToken)queueGithubPublish();
-      else if(rememberedGithubToken())githubPendingLocalEdits=true;
+      if(serverMode){
+        localStorage.setItem(SERVER_DIRTY_KEY,'1');
+        toast('로컬 저장 완료 · 서버 게시 대기');
+        queueServerPublish();
+      }else{
+        toast(githubToken?'로컬 저장 완료 · GitHub 게시 대기':'브라우저에 저장했습니다.');
+        if(githubToken)queueGithubPublish();
+        else if(rememberedGithubToken())githubPendingLocalEdits=true;
+      }
     }catch(e){toast('로컬 저장에 실패했습니다. JSON으로 백업하세요.');}
     draw();
   }
@@ -271,6 +345,7 @@
   function formRelease(id, idx){const t=toolById(id)||catalog.tools[0];if(!t)return toast('먼저 프로그램을 추가하세요.');const r=Number.isInteger(idx)?t.releases[idx]:null;modal(r?'버전 기록 수정':'새 버전 등록','버전별 변경 사항과 설치 파일 링크를 등록합니다.',`<form id="releaseForm"><input type="hidden" name="originalTool" value="${esc(t.id)}"><input type="hidden" name="index" value="${r?idx:''}"><div class="form-grid"><div class="field"><label>프로그램</label><select name="toolId" ${r?'disabled':''}>${catalog.tools.map(x=>`<option value="${esc(x.id)}" ${x.id===t.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div><div class="field"><label>버전 번호 *</label><input name="version" required maxlength="32" value="${esc(r?.version||'')}" placeholder="예: 1.0.5"></div></div><div class="form-grid"><div class="field"><label>배포일 (선택)</label><input name="date" type="date" value="${esc(r?.date||'')}"></div><div class="field"><label>버전 구분</label><select name="kind">${[['stable','기준 버전'],['beta','시험 버전'],['archived','보관 기록']].map(([k,v])=>`<option value="${k}" ${r?.kind===k?'selected':''}>${v}</option>`).join('')}</select></div></div><div class="field"><label>게시글 제목 *</label><input name="title" required maxlength="140" placeholder="예: 우클릭 메뉴 등록 기능 추가" value="${esc(r?.title||'')}"></div><div class="field"><label>변경 사항 (한 줄에 하나씩)</label><textarea name="changes" maxlength="8000" placeholder="새로운 기능&#10;수정한 오류">${esc((r?.changes||[]).join('\n'))}</textarea></div><div class="field"><label>실제 파일 다운로드 주소 (선택)</label><input name="download" type="url" placeholder="https://github.com/.../releases/download/..." value="${esc(r?.download||'')}"><div class="field-note">GitHub Releases에 파일을 올린 다음 실제 주소를 등록합니다. 파일명에 버전 숫자가 없어도 됩니다.</div></div><div class="field"><label>비고 (선택)</label><input name="note" maxlength="250" value="${esc(r?.note||'')}" placeholder="예: 배포 전 테스트 필요"></div><div class="form-actions">${r?`<button class="button warn" type="button" data-action="remove-release" data-id="${esc(t.id)}" data-index="${idx}">삭제</button>`:''}<button class="button" type="button" data-action="close">취소</button><button class="button primary" type="submit">${svg('check')} 저장하기</button></div></form>`);}
   function formGuide(id,idx){const t=toolById(id);if(!t)return;const g=Number.isInteger(idx)?t.guide[idx]:null;modal(g?'설명서 항목 수정':'설명서 항목 추가','설치·사용·오류 해결 등을 단계별로 기록할 수 있습니다.',`<form id="guideForm"><input type="hidden" name="id" value="${esc(id)}"><input type="hidden" name="index" value="${g?idx:''}"><div class="field"><label>항목 제목 *</label><input name="title" required maxlength="100" value="${esc(g?.title||'')}" placeholder="예: 프로그램 설치"></div><div class="field"><label>설명 내용 *</label><textarea name="text" required maxlength="8000" style="min-height:190px" placeholder="상세한 사용법을 적어 주세요.">${esc(g?.text||'')}</textarea></div><div class="form-actions">${g?`<button class="button warn" type="button" data-action="remove-guide" data-id="${esc(id)}" data-index="${idx}">삭제</button>`:''}<button class="button" type="button" data-action="close">취소</button><button class="button primary" type="submit">${svg('check')} 저장하기</button></div></form>`);}
   function settings(){
+    if(serverMode){settingsServer();return;}
     const syncCard = githubToken
       ? `<div class="manage-card">${svg('check')}<h3>GitHub 자동 게시</h3><p>${esc(githubStatus)}. 프로그램·버전·설명서 저장 시 catalog.js를 GitHub에 게시합니다.</p><button class="button" type="button" data-action="sync-now">지금 게시</button> ${githubRemember?'<button class="button" type="button" data-action="forget-github">연결 유지 끄기</button>':'<button class="button" type="button" data-action="remember-github">이 브라우저에서 연결 유지</button>'} <button class="button" type="button" data-action="disconnect-github">연결 끊기</button></div>`
       : `<div class="manage-card">${svg('upload')}<h3>GitHub 자동 게시 연결</h3><p>저장소 reporter-toolkit의 Contents: Read and write 권한을 가진 Fine-grained token으로 연결합니다.</p><input id="githubTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="GitHub fine-grained token" style="max-width:100%;min-height:41px;padding:8px;border:1px solid #ced7e5;border-radius:8px"><label style="display:flex;align-items:center;gap:8px;margin:12px 0;font-size:13px"><input id="rememberGithubToken" type="checkbox" style="width:16px;height:16px"> 이 브라우저에서 연결 유지</label><p style="font-size:12px">선택하면 토큰을 브라우저에 저장합니다. 같은 도메인의 웹 스크립트에서 읽힐 위험이 있으므로 개인 PC에서만 사용하세요. 기본값은 저장하지 않음입니다.</p><button class="button primary" type="button" data-action="connect-github">GitHub 연결</button></div>`;
@@ -305,7 +380,8 @@
     else if(a==='settings')settings();else if(a==='export')exportData();else if(a==='import')$('#importFile')?.click();else if(a==='publish')publishCatalog();
     else if(a==='connect-github')void connectGithub();else if(a==='disconnect-github')disconnectGithub();
     else if(a==='remember-github')enableGithubRemember();else if(a==='forget-github')disableGithubRemember();
-    else if(a==='sync-now')void publishGithub();
+    else if(a==='sync-now')void (serverMode?publishServer():publishGithub());
+    else if(a==='logout-admin'&&serverMode)void logoutServer();
     else if(a==='reset'){if(confirm('모든 로컬 변경 사항을 초기화합니다. 미리 JSON 백업을 받았나요?')){catalog=structuredClone(seed);closeModal();save();go('home');}}
     else if(a==='remove-tool'){const t=toolById(id);if(t&&confirm(`“${t.name}”와 버전 기록, 설명서를 모두 삭제할까요?`)){catalog.tools=catalog.tools.filter(x=>x.id!==id);closeModal();save();go('home');}}
     else if(a==='remove-release'){const t=toolById(id),i=Number(item.dataset.index);if(t?.releases[i]&&confirm('이 버전 기록을 삭제할까요?')){t.releases.splice(i,1);t.version=t.releases.find(r=>r.kind==='stable')?.version||'';closeModal();save();draw();}}
@@ -318,7 +394,10 @@
   window.addEventListener('hashchange',route);
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#sidebar').classList.remove('open');}if(e.key==='/'&&!$('#modalRoot').firstChild&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();$('#searchInput').focus();}});
   iconize();route();
-  const remembered=rememberedGithubToken();
-  if(remembered)void connectGithub(remembered);
+  if(serverMode)void loadServerCatalog();
+  else{
+    const remembered=rememberedGithubToken();
+    if(remembered)void connectGithub(remembered);
+  }
 })();
 
