@@ -10,7 +10,7 @@ window.REPORTER_TOOLKIT_SEED = {
       "category": "접속 자동화",
       "icon": "shield",
       "status": "active",
-      "version": "1.1",
+      "version": "테스트",
       "repository": "",
       "homepage": "",
       "tags": [
@@ -20,9 +20,20 @@ window.REPORTER_TOOLKIT_SEED = {
       ],
       "releases": [
         {
+          "version": "테스트",
+          "date": "2026-10-18",
+          "kind": "stable",
+          "title": "테스트",
+          "changes": [
+            "테스트"
+          ],
+          "download": "",
+          "note": ""
+        },
+        {
           "version": "1.1",
           "date": "2026-10-13",
-          "kind": "stable",
+          "kind": "archived",
           "title": "VPN 자동접속 v1.1",
           "changes": [
             "초기설정 기능을 추가해 처음 이용하는 사람이 쉽게 세팅할 수 있도록 했습니다. 사용설명서를 꼭 읽어주세요."
