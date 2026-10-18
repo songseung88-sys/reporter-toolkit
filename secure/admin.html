@@ -42,6 +42,17 @@
   <div id="modalRoot"></div>
   <div class="toast-area" id="toastArea" aria-live="polite"></div>
   <script src="catalog.js"></script>
-  <script src="app.js"></script>
+  <script>
+    // The editor must execute only when delivered by the authenticated Worker.
+    // The Worker injects REPORTER_ADMIN_SERVER immediately before catalog.js.
+    if (window.REPORTER_ADMIN_SERVER === true) {
+      const script = document.createElement('script');
+      script.src = 'app.js';
+      document.body.appendChild(script);
+    } else {
+      try { localStorage.removeItem('reporter-toolkit-github-remember-v1'); } catch {}
+      window.location.replace('https://songseung88-sys.github.io/reporter-toolkit/view.html');
+    }
+  </script>
 </body>
 </html>
