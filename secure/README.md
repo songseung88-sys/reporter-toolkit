@@ -1,6 +1,6 @@
 # 취재 도구함: 로그인형 관리자 서버
 
-이 폴더는 **준비된 배포 소스**입니다. Cloudflare Workers 배포와 서버 비밀값 설정은 아직 별도로 필요합니다.
+이 폴더에는 취재 도구함의 **운영 중인 로그인형 관리자 서버 코드**와 재배포 안내가 있습니다. 로그인 및 게시 기능은 Cloudflare Workers에서 작동하며, 공개 GitHub Pages는 열람 전용입니다.
 
 - 관리자: Cloudflare Worker가 제공하는 별도의 `https://...workers.dev/` 주소
 - 열람: 기존 `https://songseung88-sys.github.io/reporter-toolkit/view.html` 주소 유지
@@ -28,7 +28,7 @@
    - `SESSION_SECRET`: 쿠키 서명을 위한 별도의 무작위 문자열 (예: 48바이트를 Base64 인코딩한 값)
 5. Worker의 `https://reporter-toolkit-admin.<account>.workers.dev/` 형식의 실제 URL을 열어 로그인합니다. **이 주소는 계정에 따라 달라지므로 아직 확정된 주소가 아닙니다.**
 6. 관리자 화면에서 기존 데이터가 표시되는지 확인하고, 사소한 변경을 게시해 읽기 전용 화면에서 반영되는지 테스트합니다.
-7. 모든 테스트가 성공한 뒤에만 기존 공개 GitHub Pages의 관리자 화면을 읽기 전용으로 바꾸거나 새 관리자 주소로 이동시킵니다. **이전에는 기존 관리자 주소를 유지해 주세요.**
+7. GitHub Pages의 기존 관리자 주소는 이미 읽기 전용 페이지로 이동하도록 변경되어 있습니다. Cloudflare 관리자 서버에서 정상적으로 로그인 및 게시되는지 점검합니다.
 
 Secret 등록 예시의 값은 토큰이나 비밀번호를 **GitHub 코드, README, 이 채팅에 입력하라는 뜻이 아닙니다.** Cloudflare 설정창에만 입력해 주세요.
 
@@ -49,7 +49,7 @@ npx wrangler secret put SESSION_SECRET
 
 - **현재** GitHub Pages 루트(`/`)는 기존 관리자 프런트엔드이며 암호 보호가 되지 않습니다. 다만 GitHub 토큰이 없으면 GitHub 원격 게시 권한은 얻지 못합니다.
 - 기존 `songseung88-sys.github.io` 브라우저에 **연결 유지**로 GitHub 토큰을 보관했다면, 새 관리자 방식 전환 후 구 관리자 화면에서 **연결 끊기**를 눌러 해당 로컬 토큰을 지우고, 필요시 발급한 PAT를 폐기하세요.
-- 이 로그인형 관리자 서버가 테스트된 다음 공개 관리자 진입점을 비활성화해야 보호된 관리 화면이라는 요구가 온전히 충족됩니다.
+- 예전 GitHub Pages 관리자 경로뿐 아니라 공개로 제공되는 \`secure/admin.html\`에서도 관리자 스크립트를 실행하지 않도록 보호했습니다.
 - Worker 관리자 화면은 기존 GitHub Pages와 도메인이 다르므로 브라우저의 로컬 미게시 데이터는 자동으로 이전되지 않습니다. 게시되지 않은 작업이 있다면 이전 페이지에서 JSON 백업을 받은 뒤 새 관리자 화면에서 복원해 주세요.
 - 보안 강화를 위해 Cloudflare Access 또는 요청 제한 규칙을 관리자 Worker 앞에 추가할 수 있습니다.
 
