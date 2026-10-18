@@ -1,4 +1,4 @@
-// 취재 도구함 게시용 데이터. 관리자 페이지에서 자동으로 게시됨.
+// 취재 도구함 게시 데이터.
 window.REPORTER_TOOLKIT_SEED = {
   "schema": 1,
   "tools": [
