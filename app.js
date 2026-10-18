@@ -168,7 +168,11 @@
     try{
       const result=await serverRequest('GET','/api/catalog');
       serverSha=result.sha;
-      serverStatus='관리자 로그인 연결됨';
+      const tokenProblem=result.tokenReadStatus&&result.tokenReadStatus!==200;
+      serverStatus=tokenProblem
+        ? 'GitHub 토큰 읽기 인증 오류 (HTTP '+result.tokenReadStatus+') · Secret GITHUB_TOKEN 점검 필요'
+        : '관리자 로그인 및 GitHub 연결됨';
+      if(tokenProblem)toast('프로그램 데이터는 공개 저장소에서 불러왔지만 GitHub 토큰 인증에 실패했습니다. 데이터 관리에서 게시하기 전에 GITHUB_TOKEN을 확인해주세요.');
       const draft=localStorage.getItem(SERVER_DIRTY_KEY)==='1';
       if(!draft){
         catalog=verifyCatalog(result.catalog);
