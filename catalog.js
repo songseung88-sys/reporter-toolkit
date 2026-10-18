@@ -156,7 +156,7 @@ window.REPORTER_TOOLKIT_SEED = {
       "guide": [
         {
           "title": "크롬 확장 프로그램 설치",
-          "text": "다운로드 링크 클릭 또는 크롬 웹스토어(https://chromewebstore.google.com/)에서 'TC Finder'를 검색해 설치하세요."
+          "text": "다운로드 버튼 클릭 또는 크롬 웹스토어(https://chromewebstore.google.com/)에서 'TC Finder'를 검색해 설치하세요."
         },
         {
           "title": "사용 방법",
