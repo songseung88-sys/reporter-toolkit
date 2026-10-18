@@ -53,6 +53,19 @@ npx wrangler secret put SESSION_SECRET
 - Worker 관리자 화면은 기존 GitHub Pages와 도메인이 다르므로 브라우저의 로컬 미게시 데이터는 자동으로 이전되지 않습니다. 게시되지 않은 작업이 있다면 이전 페이지에서 JSON 백업을 받은 뒤 새 관리자 화면에서 복원해 주세요.
 - 보안 강화를 위해 Cloudflare Access 또는 요청 제한 규칙을 관리자 Worker 앞에 추가할 수 있습니다.
 
+## 오류 진단 (GitHub 연결)
+
+관리자 로그인이 되지만 `Could not read GitHub catalog` 오류가 발생하면 Cloudflare에 배포된 `worker.js`가 GitHub 파일을 읽지 못하는 상황입니다. 서버 코드를 업데이트한 경우 **GitHub에서 변경하는 것만으로 배포된 Worker가 변경되지는 않습니다.** Cloudflare → reporter-toolkit-admin → Edit code에서 저장소의 최신 `secure/worker.js` 전체 내용으로 교체해 다시 Deploy해야 합니다.
+
+로그인에 성공한 상태에서 `https://reporter-toolkit-admin.songseung88.workers.dev/api/diagnostics`를 열면 다음 상태가 **비밀값을 노출하지 않고** 표시됩니다.
+
+- `githubTokenReadHttpStatus: 200`: 서버의 GitHub 토큰으로 파일 읽기 성공 (쓰기 권한까지 보장하는 것은 아님)
+- `githubTokenReadHttpStatus: 401`: GitHub 토큰 무효·오입력·만료 가능성
+- `githubTokenReadHttpStatus: 403`: GitHub 토큰 권한/정책 또는 요청 제한 문제 가능성
+- `catalogReadHttpStatus: 200`: 게시된 파일을 정상 읽음. 토큰이 거부되면 공개 저장소의 파일을 익명으로 가져오는 대체 경로를 시도합니다.
+
+GitHub 쓰기 권한은 `GITHUB_TOKEN`에 저장한 토큰에 `reporter-toolkit` 저장소의 Contents: Read and write가 있어야 정상 작동합니다. 진단의 상태 코드와 Secret **이름만** 공유하세요. Secret **값이나 토큰 문자열은 공유하지 마세요.**
+
 ## 데이터 충돌 방지
 
 서버는 저장할 때 현재 GitHub `catalog.js`의 SHA를 확인하며, 접속 이후 다른 곳에서 내용이 바뀌었으면 자동으로 덮어쓰지 않고 오류를 반환합니다. 저장 실패 시 편집 내용은 관리자 브라우저에 남고, 직접 확인 후 재시도할 수 있습니다.
