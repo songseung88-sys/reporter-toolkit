@@ -45,11 +45,11 @@ npx wrangler secret put SESSION_SECRET
 
 `wrangler.toml`이 Worker 이름과 소스 파일을 지정합니다. Secret을 3개 모두 입력한 후 관리자 주소에서 로그인합니다.
 
-## 현재 공개 관리자 페이지 관련 주의점
+## 운영 중인 공개 페이지 관리
 
-- **현재** GitHub Pages 루트(`/`)는 기존 관리자 프런트엔드이며 암호 보호가 되지 않습니다. 다만 GitHub 토큰이 없으면 GitHub 원격 게시 권한은 얻지 못합니다.
-- 기존 `songseung88-sys.github.io` 브라우저에 **연결 유지**로 GitHub 토큰을 보관했다면, 새 관리자 방식 전환 후 구 관리자 화면에서 **연결 끊기**를 눌러 해당 로컬 토큰을 지우고, 필요시 발급한 PAT를 폐기하세요.
-- 예전 GitHub Pages 관리자 경로뿐 아니라 공개로 제공되는 \`secure/admin.html\`에서도 관리자 스크립트를 실행하지 않도록 보호했습니다.
+- GitHub Pages 루트(`/`)는 읽기 전용 `view.html`로 자동 이동합니다. 관리자 편집 기능은 Cloudflare 로그인 서버에서만 실행됩니다.
+- 예전 GitHub Pages에서 ‘연결 유지’로 저장한 브라우저 토큰은 루트 페이지를 방문할 때 삭제하도록 했습니다. 이전에 유출 가능성이 있는 토큰이라면 GitHub에서 폐기하세요.
+- 예전 GitHub Pages 관리자 경로뿐 아니라 공개로 제공되는 `secure/admin.html`에서도 관리자 스크립트를 실행하지 않도록 보호했습니다.
 - Worker 관리자 화면은 기존 GitHub Pages와 도메인이 다르므로 브라우저의 로컬 미게시 데이터는 자동으로 이전되지 않습니다. 게시되지 않은 작업이 있다면 이전 페이지에서 JSON 백업을 받은 뒤 새 관리자 화면에서 복원해 주세요.
 - 보안 강화를 위해 Cloudflare Access 또는 요청 제한 규칙을 관리자 Worker 앞에 추가할 수 있습니다.
 
