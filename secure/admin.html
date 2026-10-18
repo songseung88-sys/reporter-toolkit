@@ -7,6 +7,14 @@
   <meta name="description" content="개인용 취재 자동화 도구와 사용 설명서, 버전 이력을 관리하는 대시보드" />
   <title>취재 도구함 · 관리자</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    .admin-view-link { height:36px; flex-shrink:0; font-size:12px; }
+    .admin-view-link .external-mark { font-size:14px; line-height:1; }
+    @media(max-width:500px) {
+      .admin-view-link { padding:0 9px; font-size:11px; }
+      .admin-view-link .external-mark { display:none; }
+    }
+  </style>
 </head>
 <body>
   <div class="app-shell">
@@ -33,6 +41,7 @@
         <div class="breadcrumbs" id="breadcrumbs"><span>메뉴</span><span class="crumb-sep">/</span><strong>대시보드</strong></div>
         <div class="header-actions">
           <div class="search-wrap"><span data-icon="search"></span><input id="searchInput" type="search" placeholder="프로그램 및 업데이트 검색" aria-label="프로그램 검색" autocomplete="off" /><kbd>/</kbd></div>
+          <a class="button small admin-view-link" href="https://songseung88-sys.github.io/reporter-toolkit/view.html" target="_blank" rel="noopener noreferrer" title="읽기 전용 페이지 새 탭으로 열기" aria-label="열람 페이지 새 탭으로 열기">열람 페이지 <span class="external-mark" aria-hidden="true">↗</span></a>
           <button type="button" class="icon-button" data-action="settings" aria-label="데이터 관리" title="데이터 관리"><span data-icon="settings"></span></button>
         </div>
       </header>
