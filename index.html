@@ -1,47 +1,21 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0c1322" />
-  <meta name="description" content="개인용 취재 자동화 도구와 사용 설명서, 버전 이력을 관리하는 대시보드" />
-  <title>취재 도구함</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>취재 도구함 · 열람 페이지로 이동</title>
+  <meta http-equiv="refresh" content="0;url=./view.html">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="identity">
-        <div class="identity-logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1a6 6 0 0 1-7.8 7.8l-7.3 7.3a2 2 0 0 1-2.8-2.8l7.3-7.3a6 6 0 0 1 7.8-7.8z"/></svg></div>
-        <div class="identity-title">취재 도구함</div>
-      </div>
-      <nav class="menu" aria-label="주요 메뉴">
-        <div class="menu-section">메뉴</div>
-        <button class="nav-link active" data-nav="home" type="button"><span class="nav-icon" data-icon="grid"></span>대시보드</button>
-        <button class="nav-link" data-nav="updates" type="button"><span class="nav-icon" data-icon="clock"></span>업데이트 기록</button>
-        <div class="menu-section section-gap">프로그램</div>
-        <div id="toolNav"></div>
-        <button class="nav-link nav-add" data-action="add-tool" type="button"><span class="nav-icon" data-icon="plus"></span>프로그램 추가</button>
-      </nav>
-      <div class="sidebar-bottom">
-        <button class="settings-link" type="button" data-action="settings"><span data-icon="settings"></span> 데이터 관리 <span data-icon="arrow"></span></button>
-      </div>
-    </aside>
-    <div class="main-col">
-      <header class="topbar">
-        <button type="button" class="mobile-menu" id="mobileMenu" aria-label="메뉴 열기"><span data-icon="menu"></span></button>
-        <div class="breadcrumbs" id="breadcrumbs"><span>메뉴</span><span class="crumb-sep">/</span><strong>대시보드</strong></div>
-        <div class="header-actions">
-          <div class="search-wrap"><span data-icon="search"></span><input id="searchInput" type="search" placeholder="프로그램 및 업데이트 검색" aria-label="프로그램 검색" autocomplete="off" /><kbd>/</kbd></div>
-          <button type="button" class="icon-button" data-action="settings" aria-label="데이터 관리" title="데이터 관리"><span data-icon="settings"></span></button>
-        </div>
-      </header>
-      <main class="main-content" id="content" tabindex="-1"></main>
-    </div>
-  </div>
-  <div id="modalRoot"></div>
-  <div class="toast-area" id="toastArea" aria-live="polite"></div>
-  <script src="catalog.js"></script>
-  <script src="app.js"></script>
+  <p>취재 도구함 열람 페이지로 이동합니다. <a href="./view.html">열람 페이지 열기</a></p>
+  <script>
+    // Old GitHub Pages origin must no longer retain the legacy GitHub PAT.
+    try { localStorage.removeItem('reporter-toolkit-github-remember-v1'); } catch {}
+    const target = new URL('./view.html', location.href);
+    target.search = location.search;
+    target.hash = location.hash;
+    location.replace(target.href);
+  </script>
 </body>
 </html>
