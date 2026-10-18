@@ -10,7 +10,7 @@ window.REPORTER_TOOLKIT_SEED = {
       "category": "접속 자동화",
       "icon": "shield",
       "status": "active",
-      "version": "",
+      "version": "1.2.3",
       "repository": "",
       "homepage": "",
       "tags": [
@@ -19,6 +19,20 @@ window.REPORTER_TOOLKIT_SEED = {
         "JMM"
       ],
       "releases": [
+        {
+          "version": "1.2.3",
+          "date": "2026-10-18",
+          "kind": "stable",
+          "title": "VPN 자동접속 v.1.2.3",
+          "changes": [
+            "초기 설정 마법사 추가: 포털·JMM을 처음 사용하는 PC에서도 계정, VPN 프로그램 경로, 로그인 좌표를 단계별로 설정할 수 있습니다.",
+            "포털/JMM 개별 설정 지원: 둘 다 설정하거나 필요한 서비스 하나만 선택할 수 있습니다.",
+            "설정 이어하기 지원: 초기 설정이 중간에 실패해도 완료된 단계는 저장되며, 다음 실행 시 중단된 단계부터 계속할 수 있습니다.",
+            "사용 편의성 개선: VPN 프로그램 자동 탐색, 진행 안내 개선, 접속 성공 후 프로그램 자동 종료 기능을 추가했습니다."
+          ],
+          "download": "https://drive.google.com/file/d/1FwOQatw6x0sRoVnkeWnw3RhyYzJdaEYD/view?usp=sharing",
+          "note": ""
+        },
         {
           "version": "1.1",
           "date": "2026-10-13",
