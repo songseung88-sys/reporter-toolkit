@@ -2,6 +2,12 @@
   'use strict';
   const STORE_KEY = 'reporter-toolkit-catalog-v1';
   const serverMode = window.REPORTER_ADMIN_SERVER === true;
+  // The legacy, publicly accessible static editor has been retired.
+  // Only the logged-in Cloudflare Worker serves a functioning admin UI.
+  if (!serverMode) {
+    try { localStorage.removeItem('reporter-toolkit-github-remember-v1'); } catch {}
+    return;
+  }
   const SERVER_DIRTY_KEY = 'reporter-toolkit-server-draft-v1';
   let serverSha='', serverPublishing=false, serverTimer=null, serverPublishAgain=false, serverStatus='연결 확인 중';
   const GITHUB_CATALOG_API = 'https://api.github.com/repos/songseung88-sys/reporter-toolkit/contents/catalog.js';
