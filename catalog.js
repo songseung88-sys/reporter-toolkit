@@ -10,7 +10,7 @@ window.REPORTER_TOOLKIT_SEED = {
       "category": "접속 자동화",
       "icon": "shield",
       "status": "active",
-      "version": "테스트",
+      "version": "",
       "repository": "",
       "homepage": "",
       "tags": [
@@ -19,17 +19,6 @@ window.REPORTER_TOOLKIT_SEED = {
         "JMM"
       ],
       "releases": [
-        {
-          "version": "테스트",
-          "date": "2026-10-18",
-          "kind": "stable",
-          "title": "테스트",
-          "changes": [
-            "테스트"
-          ],
-          "download": "",
-          "note": ""
-        },
         {
           "version": "1.1",
           "date": "2026-10-13",
