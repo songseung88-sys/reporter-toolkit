@@ -94,25 +94,51 @@ function loginHtml(){
     'document.getElementById("password").value="";if(!response.ok)throw Error("비밀번호를 확인해 주세요.");location.replace("/");}'+
     'catch(err){message.textContent=err.message;button.disabled=false;}});</script></body></html>';
 }
-async function ghRequest(env,method,body=null){
-  const res=await fetch(API,{
-    method,headers:{
-      'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',
-      'Authorization':'Bearer '+env.GITHUB_TOKEN,
-      ...(body?{'Content-Type':'application/json'}:{})
-    },...(body?{body:JSON.stringify(body)}:{})
-  });
+async function ghRequest(env,method,body=null,authenticated=true){
+  const headers={
+    'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',
+    'User-Agent':'ReporterToolkitAdminWorker',
+    ...(authenticated?{'Authorization':'Bearer '+env.GITHUB_TOKEN}:{}),
+    ...(body?{'Content-Type':'application/json'}:{})
+  };
+  let res;
+  try{
+    res=await fetch(API,{
+      method,headers,
+      ...(body?{body:JSON.stringify(body)}:{})
+    });
+  }catch(err){
+    throw Object.assign(new Error('GitHub connection failed'),{code:502});
+  }
   const response=await res.json().catch(()=>({}));
-  if(!res.ok)throw Object.assign(new Error('GitHub API '+res.status),{code:res.status});
+  if(!res.ok)throw Object.assign(new Error('GitHub HTTP '+res.status),{code:res.status});
   return response;
 }
 async function publishedCatalog(env){
-  const remote=await ghRequest(env,'GET');
-  const script=decoder.decode(fromB64url(remote.content.replace(/\s/g,'').replace(/\+/g,'-').replace(/\//g,'_')));
-  const found=script.match(/window\.REPORTER_TOOLKIT_SEED\s*=\s*([\s\S]*?)\s*;\s*$/);
-  if(!found)throw Error('Invalid published catalog');
-  const catalog=JSON.parse(found[1]);
-  return {sha:remote.sha,catalog};
+  let remote, tokenReadStatus=200;
+  // Catalog belongs to a public repository. If the token is rejected, the
+  // published catalog can still be read anonymously without weakening PUT auth.
+  try{
+    remote=await ghRequest(env,'GET');
+  }catch(err){
+    tokenReadStatus=err.code||502;
+    if(![401,403,404,429].includes(tokenReadStatus))throw err;
+    remote=await ghRequest(env,'GET',null,false);
+  }
+  if(!remote||typeof remote.content!=='string'||typeof remote.sha!=='string')
+    throw Object.assign(new Error('GitHub returned no file contents'),{code:502});
+  let catalog;
+  try{
+    const encoded=remote.content.replace(/\s/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+    const script=decoder.decode(fromB64url(encoded));
+    const found=script.match(/window\.REPORTER_TOOLKIT_SEED\s*=\s*([\s\S]*?)\s*;\s*$/);
+    if(!found)throw Error('No catalog assignment');
+    catalog=JSON.parse(found[1]);
+    if(!validCatalog(catalog))throw Error('Invalid catalog data');
+  }catch{
+    throw Object.assign(new Error('GitHub catalog format invalid'),{code:502});
+  }
+  return {sha:remote.sha,catalog,tokenReadStatus};
 }
 function validCatalog(c){
   if(!c||c.schema!==1||!Array.isArray(c.tools)||c.tools.length>200)return false;
@@ -144,9 +170,25 @@ async function handleApi(request,env,url){
   }
   if(!(await sessionValid(request,env)))return json({error:'Login required'},401);
   if(method==='GET'&&url.pathname==='/api/session')return json({ok:true});
+  if(method==='GET'&&url.pathname==='/api/diagnostics'){
+    let tokenStatus=200, publicCatalogStatus=200;
+    try{await ghRequest(env,'GET');}
+    catch(err){tokenStatus=err.code||502;}
+    try{await publishedCatalog(env);}
+    catch(err){publicCatalogStatus=err.code||502;}
+    return json({
+      secretsConfigured:true,
+      githubTokenReadHttpStatus:tokenStatus,
+      catalogReadHttpStatus:publicCatalogStatus,
+      publishingReady:tokenStatus===200&&publicCatalogStatus===200,
+      note:'A successful authenticated GET does not guarantee PUT permission.'
+    });
+  }
   if(method==='GET'&&url.pathname==='/api/catalog'){
     try{return json(await publishedCatalog(env));}
-    catch{return json({error:'Could not read GitHub catalog'},502);}
+    catch(err){
+      return json({error:'Could not read GitHub catalog',githubStatus:err.code||502},502);
+    }
   }
   if(method==='PUT'&&url.pathname==='/api/catalog'){
     if(request.headers.get('X-Reporter-Toolkit')!=='admin')return json({error:'Invalid request'},403);
@@ -163,7 +205,10 @@ async function handleApi(request,env,url){
       const result=await ghRequest(env,'PUT',{message:'Publish reporter toolkit catalog from secure admin',
         sha:current.sha,branch:'main',content:encodeBase64Utf8(content)});
       return json({ok:true,sha:result.content?.sha});
-    }catch(err){return json({error:err.code===409?'Conflict':'Publish error',code:err.code||502},err.code===409?409:502);}
+    }catch(err){
+      const status=err.code||502;
+      return json({error:status===409?'Conflict':status===401?'GitHub token rejected (401)':status===403?'GitHub token lacks permission or is restricted (403)':'Publish error',code:status},status===409?409:502);
+    }
   }
   return json({error:'Not found'},404);
 }
