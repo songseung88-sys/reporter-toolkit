@@ -121,7 +121,7 @@ window.REPORTER_TOOLKIT_SEED = {
       "category": "원고 편집",
       "icon": "captions",
       "status": "active",
-      "version": "1.0",
+      "version": "1.0.2.3",
       "repository": "",
       "homepage": "",
       "tags": [
@@ -131,9 +131,20 @@ window.REPORTER_TOOLKIT_SEED = {
       ],
       "releases": [
         {
+          "version": "1.0.2.3",
+          "date": "2026-10-17",
+          "kind": "stable",
+          "title": "TC 자동 삽입 v.1.0.2.3",
+          "changes": [
+            "클로바노트에서 TC를 탐색하는 기능을 개선했습니다."
+          ],
+          "download": "https://chromewebstore.google.com/detail/hknmgnoemfcljeakfemfhcdkkcmdmghl?utm_source=item-share-cb",
+          "note": ""
+        },
+        {
           "version": "1.0",
           "date": "2026-10-14",
-          "kind": "stable",
+          "kind": "archived",
           "title": "TC 자동 생성기 v1.0",
           "changes": [
             "클로바노트 변환 결과 페이지에서 원문을 발췌해서 만든 문장의 시작점 TC를 찾아주는 크롬 확장프로그램입니다."
