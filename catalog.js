@@ -156,7 +156,7 @@ window.REPORTER_TOOLKIT_SEED = {
       "guide": [
         {
           "title": "크롬 확장 프로그램 설치",
-          "text": "압축 파일을 다운 받은 뒤 압축을 원하는 위치에 풉니다.\n크롬 주소창에 chrome://extensions/ 를 입력해 확장 프로그램을 엽니다.\n우측 상단에 개발자 모드를 활성화 합니다.\n왼쪽 상단에 '압축 해제된 확장 프로그램 로드'를 누릅니다.\n아까 압축 해제한 폴더를 클릭하고 '폴더 선택'을 누릅니다.\nTC 파인더가 크롬 브라우저에 설치됐습니다."
+          "text": "다운로드 링크 클릭 또는 크롬 웹스토어(https://chromewebstore.google.com/)에서 'TC Finder'를 검색해 설치하세요."
         },
         {
           "title": "사용 방법",
