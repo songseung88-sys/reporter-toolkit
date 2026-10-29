@@ -17,6 +17,7 @@ jobs:
       - run: pip install requests beautifulsoup4 openpyxl
       - name: Collect 47 pages and validate all 465 products
         run: |
+          python - <<'PY'
           from collections import Counter
           import os,time,requests
           from bs4 import BeautifulSoup
@@ -96,10 +97,15 @@ jobs:
           path='data/mfds_tobacco_465_products_20261029.xlsx'
           wb.save(path)
           print(f'SUCCESS {path} rows={len(allrows)} cols={len(headers)+2} bytes={os.stat(path).st_size}',flush=True)
+          import csv
+          with open('data/mfds_tobacco_465_products_20261029.csv','w',newline='',encoding='utf-8-sig') as f:
+              writer=csv.writer(f);writer.writerow(headers+['원본 페이지','원본 URL']);writer.writerows(allrows)
+          print('CSV SUCCESS',flush=True)
+          PY
       - name: Commit verified workbook to this isolated branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/mfds_tobacco_465_products_20261029.xlsx
+          git add data/mfds_tobacco_465_products_20261029.xlsx data/mfds_tobacco_465_products_20261029.csv
           git commit -m "Add verified MFDS tobacco dataset (465 products)" 
           git push
