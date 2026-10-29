@@ -1,0 +1,105 @@
+name: MFDS tobacco 465 dataset
+on:
+  push:
+    branches: [mfds-tobacco-465-20261029]
+    paths: ['.github/workflows/mfds-tobacco-20261029.yml']
+permissions:
+  contents: write
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install requests beautifulsoup4 openpyxl
+      - name: Collect 47 pages and validate all 465 products
+        run: |
+          from collections import Counter
+          import os,time,requests
+          from bs4 import BeautifulSoup
+          from openpyxl import Workbook
+          from openpyxl.styles import Font,PatternFill,Alignment
+          from openpyxl.utils import get_column_letter
+          from requests.adapters import HTTPAdapter
+          from urllib3.util.retry import Retry
+          base='https://www.mfds.go.kr/wpge/m_1271/tobacco/de150101l004.do'
+          ses=requests.Session()
+          ses.headers.update({'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36','Accept-Language':'ko-KR,ko;q=0.9'})
+          ses.mount('https://',HTTPAdapter(max_retries=Retry(total=4,backoff_factor=2,status_forcelist=[429,500,502,503,504])))
+          allrows=[];headers=None;counts=[]
+          for page in range(1,48):
+              u=f'{base}?page={page}&srchWord='
+              r=ses.get(u,timeout=35);r.raise_for_status()
+              sp=BeautifulSoup(r.content,'html.parser')
+              t=sp.select_one('table.prodtbl')
+              if not t:raise ValueError(f'No product table on page {page}, status {r.status_code}, length {len(r.content)}')
+              h=[x.get_text(' ',strip=True) for x in t.select('thead tr')[1].find_all('th')]
+              if len(h)!=46:raise ValueError(f'Page {page}: {len(h)} chemical columns, expected 46')
+              if headers is None:headers=['순번','제품형','판매사','제품명']+h
+              if headers[4:]!=h:raise ValueError(f'Page {page}: unexpected header change')
+              trs=t.select('tbody > tr')
+              if len(trs)!=(5 if page==47 else 10):raise ValueError(f'Page {page}: {len(trs)} rows')
+              for tr in trs:
+                  v=[x.get_text(' ',strip=True) for x in tr.find_all('td',recursive=False)]
+                  if len(v)!=50:raise ValueError(f'Page {page}: {len(v)} cols')
+                  n=int(v[0])
+                  if n!=len(allrows)+1:raise ValueError(f'Unexpected serial {n}; expected {len(allrows)+1}')
+                  vals=[]
+                  for x in v[4:]:
+                      if x=='':vals.append(None)
+                      elif x.upper() in ('NQ','ND','NR','NA','N/A','-'):vals.append(x)
+                      else:
+                          try:vals.append(float(x.replace(',','')))
+                          except ValueError:vals.append(x)
+                  allrows.append([n,*v[1:4],*vals,page,u])
+              counts.append(len(trs))
+              print(f'{page}/47: {len(trs)} products, total {len(allrows)}',flush=True)
+              if page!=47:time.sleep(.6)
+          if len(allrows)!=465:raise ValueError(f'Expected 465 products, got {len(allrows)}')
+          wb=Workbook();ws=wb.active;ws.title='전체 465개 제품'
+          ws.append(headers+['원본 페이지','원본 URL'])
+          for row in allrows:ws.append(row)
+          ws.freeze_panes='E2';ws.auto_filter.ref='A1:AZ466'
+          ws.sheet_view.showGridLines=False
+          for c in ws[1]:
+              c.fill=PatternFill('solid',fgColor='162A49');c.font=Font(bold=True,color='FFFFFF',size=10)
+              c.alignment=Alignment(wrap_text=True,horizontal='center',vertical='center')
+          ws.row_dimensions[1].height=42
+          for i in range(1,53):
+              ws.column_dimensions[get_column_letter(i)].width=(9 if i==1 else 17 if i==2 else 26 if i==3 else 42 if i==4 else 12 if i==51 else 78 if i==52 else 23)
+          for i in range(2,467):
+              for j in range(5,51):
+                  cell=ws.cell(i,j)
+                  if isinstance(cell.value,float):cell.number_format='0.0##'
+              if i%2==0:
+                  for c in ws[i]:c.fill=PatternFill('solid',fgColor='F2F6FA')
+              c=ws.cell(i,52);c.hyperlink=c.value;c.font=Font(color='1565C0',underline='single')
+          info=wb.create_sheet('수집 안내')
+          for a,b in [
+           ('자료명','식약처 담배 제품별 유해성분 검출량 (465개 제품)'),
+           ('출처','식품의약품안전처'),
+           ('원본 URL',f'{base}?page=1&srchWord='),
+           ('게시 건수',465),('수집 건수',len(allrows)),('수집 페이지',47),('성분 항목 수',46),
+           ('기준일','2026-10-29'),('데이터 구성','순번 / 제품형 / 판매사 / 제품명 / 유해성분별 함량 / 출처 URL'),
+           ('원본 수치','측정값은 숫자로 저장, NQ 등 약어는 원문 그대로, 빈칸은 빈칸 유지'),
+           ('주의','성분별 측정단위와 제품형을 확인. 제품 간 숫자로 건강 위해성 우열을 단순 비교하지 말 것'),
+           ('페이지별 개수',', '.join(f'{n}:{c}' for n,c in enumerate(counts,1)))
+          ]:info.append([a,b])
+          info.column_dimensions['A'].width=24;info.column_dimensions['B'].width=100
+          for row in info:
+              row[0].fill=PatternFill('solid',fgColor='E6EEF8');row[0].font=Font(bold=True)
+          info['B3'].hyperlink=info['B3'].value;info['B3'].font=Font(color='1565C0',underline='single')
+          os.makedirs('data',exist_ok=True)
+          path='data/mfds_tobacco_465_products_20261029.xlsx'
+          wb.save(path)
+          print(f'SUCCESS {path} rows={len(allrows)} cols={len(headers)+2} bytes={os.stat(path).st_size}',flush=True)
+      - name: Commit verified workbook to this isolated branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/mfds_tobacco_465_products_20261029.xlsx
+          git commit -m "Add verified MFDS tobacco dataset (465 products)" 
+          git push
